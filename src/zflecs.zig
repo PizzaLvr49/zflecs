@@ -1242,14 +1242,12 @@ pub const world_info_t = extern struct {
     name_prefix: [*:0]const u8,
 };
 
-const EcsAllocator = struct {
+pub const EcsAllocator = struct {
     const AllocationHeader = struct {
         size: usize,
     };
 
     const Alignment = 16;
-
-    var gpa: ?std.heap.DebugAllocator(.{}) = null;
     var allocator: ?std.mem.Allocator = null;
 
     fn alloc(size: i32) callconv(.c) ?*anyopaque {
@@ -1351,9 +1349,6 @@ pub fn init() *world_t {
     }
 
     if (num_worlds == 0) {
-        EcsAllocator.gpa = .{};
-        EcsAllocator.allocator = EcsAllocator.gpa.?.allocator();
-
         os.ecs_os_api.malloc_ = &EcsAllocator.alloc;
         os.ecs_os_api.free_ = &EcsAllocator.free;
         os.ecs_os_api.realloc_ = &EcsAllocator.realloc;
@@ -1479,9 +1474,6 @@ pub fn fini(world: *world_t) i32 {
 
     if (num_worlds == 0) {
         world_component_lookup.deinit();
-        _ = EcsAllocator.gpa.?.deinit();
-        EcsAllocator.gpa = null;
-        EcsAllocator.allocator = null;
     }
 
     return fini_result;
