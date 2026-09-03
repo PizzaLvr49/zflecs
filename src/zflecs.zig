@@ -1248,7 +1248,7 @@ pub const EcsAllocator = struct {
     };
 
     const Alignment = 16;
-    var allocator: ?std.mem.Allocator = null;
+    pub var allocator: ?std.mem.Allocator = null;
 
     fn alloc(size: i32) callconv(.c) ?*anyopaque {
         if (size < 0) {

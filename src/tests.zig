@@ -17,6 +17,7 @@ test {
 }
 
 test "extern struct ABI compatibility" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     @setEvalBranchQuota(50_000);
     const flecs_c = @cImport({
         @cDefine("FLECS_SANITIZE", if (builtin.mode == .Debug) "1" else {});
@@ -58,6 +59,7 @@ test "extern struct ABI compatibility" {
 }
 
 test "zflecs.entities.basics" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     print("\n", .{});
 
     const world = ecs.init();
@@ -152,6 +154,7 @@ fn registerComponents(world: *ecs.world_t) void {
 }
 
 test "zflecs.basic" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     print("\n", .{});
 
     const world = ecs.init();
@@ -300,6 +303,7 @@ fn move(it: *ecs.iter_t) callconv(.c) void {
 }
 
 test "zflecs.helloworld" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     print("\n", .{});
 
     const world = ecs.init();
@@ -350,6 +354,7 @@ fn move_system_with_it(it: *ecs.iter_t, positions: []Position, velocities: []con
 }
 
 test "zflecs.helloworld_systemcomptime" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     print("\n", .{});
 
     const world = ecs.init();
@@ -377,6 +382,7 @@ test "zflecs.helloworld_systemcomptime" {
 }
 
 test "zflecs.try_different_alignments" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
@@ -399,6 +405,7 @@ test "zflecs.try_different_alignments" {
 }
 
 test "zflecs.pairs.tag-tag" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
@@ -416,6 +423,7 @@ test "zflecs.pairs.tag-tag" {
 }
 
 test "zflecs.pairs.component-tag" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
@@ -435,6 +443,7 @@ test "zflecs.pairs.component-tag" {
 }
 
 test "zflecs.pairs.delete-children" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
@@ -473,6 +482,7 @@ test "zflecs.pairs.delete-children" {
 }
 
 test "zflecs.struct-dtor-hook" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
@@ -518,6 +528,7 @@ fn module(world: *ecs.world_t) callconv(.c) void {
     ecs.COMPONENT(world, Velocity);
 }
 test "zflecs-module" {
+    ecs.EcsAllocator.allocator = std.testing.allocator;
     const world = ecs.init();
     defer _ = ecs.fini(world);
 
