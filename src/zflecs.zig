@@ -6,7 +6,7 @@ const build_options = @import("build-options");
 pub const flecs_version = std.SemanticVersion{
     .major = 4,
     .minor = 1,
-    .patch = 5,
+    .patch = 6,
 };
 
 const flecs_is_sanitize = build_options.debug_mode == .sanitize or
@@ -572,6 +572,8 @@ pub const system_t = extern struct {
     run: run_action_t,
     action: iter_action_t,
     query: *query_t,
+    group_id: u64,
+    group_id_set: bool,
     tick_source: entity_t,
     multi_threaded: bool,
     immediate: bool,
@@ -591,6 +593,10 @@ pub const system_t = extern struct {
 /// `pub fn system_get(world: *world_t, system: entity_t) *const system_t`
 pub const system_get = ecs_system_get;
 extern fn ecs_system_get(world: *world_t, system: entity_t) *const system_t;
+
+/// `pub fn system_update(world: *world_t, system: entity_t, desc: *const system_desc_t) void`
+pub const system_update = ecs_system_update;
+extern fn ecs_system_update(world: *world_t, system: entity_t, desc: *const system_desc_t) void;
 
 //--------------------------------------------------------------------------------------------------
 //
@@ -676,6 +682,7 @@ pub const query_t = extern struct {
     write_fields: termset_t = 0,
     read_fields: termset_t = 0,
     row_fields: termset_t = 0,
+    shared_readonly_fields: termset_t = 0,
     set_fields: termset_t = 0,
 
     cache_kind: query_cache_kind_t = .QueryCacheDefault,
@@ -824,11 +831,9 @@ pub const var_t = extern struct {
 
 pub const ref_t = extern struct {
     entity: entity_t,
-    id: entity_t,
     table_id: u64,
     table_version_fast: u32,
     table_version: u16,
-    record: *record_t,
     ptr: ?*anyopaque,
 };
 
@@ -1059,6 +1064,7 @@ pub const iter_t = extern struct {
     entities_: [*]const entity_t,
     ptrs: ?[*]*anyopaque,
     trs: ?[*]*table_record_t,
+    columns: ?[*]const i16,
     sizes: ?[*]size_t,
     table: *table_t,
     other_table: ?*table_t,
@@ -1155,7 +1161,6 @@ pub const observer_desc_t = extern struct {
 
     run_ctx: ?*anyopaque = null,
     run_ctx_free: ?ctx_free_t = null,
-    observable: ?*poly_t = null,
     last_event_id: ?*i32 = null,
 
     term_index_: i8 = 0,
@@ -1179,6 +1184,7 @@ pub const event_desc_t = extern struct {
 pub const build_info_t = extern struct {
     compiler: ?[*:0]const u8 = null,
     addons: ?*const [*:0]const u8 = null,
+    flags: ?*const [*:0]const u8 = null,
     version: ?[*:0]const u8 = null,
     version_major: i16 = 0,
     version_minor: i16 = 0,
@@ -1190,8 +1196,6 @@ pub const build_info_t = extern struct {
 
 pub const world_info_t = extern struct {
     last_component_id: entity_t,
-    min_id: entity_t,
-    max_id: entity_t,
 
     delta_time_raw: ftime_t,
     delta_time: ftime_t,
@@ -1215,14 +1219,17 @@ pub const world_info_t = extern struct {
     table_create_total: i64,
     table_delete_total: i64,
     pipeline_build_count_total: i64,
-    systems_ran_frame: i64,
-    observers_ran_frame: i64,
+    systems_ran_total: i64,
+    observers_ran_total: i64,
+    queries_ran_total: i64,
 
     tag_id_count: i32,
     component_id_count: i32,
     pair_id_count: i32,
 
     table_count: i32,
+
+    creation_time: u32,
 
     cmd: extern struct {
         add_count: i64,
@@ -1363,90 +1370,85 @@ pub fn init() *world_t {
     if (num_worlds == 0) {
         first_world = world;
 
-        if (num_worlds == 0) {
-            first_world = world;
-
-            Query = EcsQuery;
-            Observer = EcsObserver;
-            System = EcsSystem;
-            Flecs = EcsFlecs;
-            FlecsCore = EcsFlecsCore;
-            World = EcsWorld;
-            Wildcard = EcsWildcard;
-            Any = EcsAny;
-            This = EcsThis;
-            Variable = EcsVariable;
-            Transitive = EcsTransitive;
-            Reflexive = EcsReflexive;
-            Final = EcsFinal;
-            Inheritable = EcsInheritable;
-            OnInstantiate = EcsOnInstantiate;
-            Override = EcsOverride;
-            Inherit = EcsInherit;
-            DontInherit = EcsDontInherit;
-            Symmetric = EcsSymmetric;
-            Exclusive = EcsExclusive;
-            Acyclic = EcsAcyclic;
-            Traversable = EcsTraversable;
-            With = EcsWith;
-            OneOf = EcsOneOf;
-            CanToggle = EcsCanToggle;
-            Trait = EcsTrait;
-            Relationship = EcsRelationship;
-            Target = EcsTarget;
-            PairIsTag = EcsPairIsTag;
-            Name = EcsName;
-            Symbol = EcsSymbol;
-            Alias = EcsAlias;
-            ChildOf = EcsChildOf;
-            IsA = EcsIsA;
-            DependsOn = EcsDependsOn;
-            SlotOf = EcsSlotOf;
-            OrderedChildren = EcsOrderedChildren;
-            Module = EcsModule;
-            Prefab = EcsPrefab;
-            Disabled = EcsDisabled;
-            NotQueryable = EcsNotQueryable;
-            OnAdd = EcsOnAdd;
-            OnRemove = EcsOnRemove;
-            OnSet = EcsOnSet;
-            Monitor = EcsMonitor;
-            OnTableCreate = EcsOnTableCreate;
-            OnTableDelete = EcsOnTableDelete;
-            OnDelete = EcsOnDelete;
-            OnDeleteTarget = EcsOnDeleteTarget;
-            Remove = EcsRemove;
-            Delete = EcsDelete;
-            Panic = EcsPanic;
-            Singleton = EcsSingleton;
-            Sparse = EcsSparse;
-            DontFragment = EcsDontFragment;
-            PredEq = EcsPredEq;
-            PredMatch = EcsPredMatch;
-            PredLookup = EcsPredLookup;
-            ScopeOpen = EcsScopeOpen;
-            ScopeClose = EcsScopeClose;
-            Empty = EcsEmpty;
-            OnStart = EcsOnStart;
-            PreFrame = EcsPreFrame;
-            OnLoad = EcsOnLoad;
-            PostLoad = EcsPostLoad;
-            PreUpdate = EcsPreUpdate;
-            OnUpdate = EcsOnUpdate;
-            OnValidate = EcsOnValidate;
-            PostUpdate = EcsPostUpdate;
-            PreStore = EcsPreStore;
-            OnStore = EcsOnStore;
-            PostFrame = EcsPostFrame;
-            Phase = EcsPhase;
-            Constant = EcsConstant;
-
-            // TODO DefaultChildComponent = EcsDefaultChildComponent;
-        }
-
-        num_worlds += 1;
-        world_component_lookup.put(world, std.AutoHashMap(usize, id_t).init(EcsAllocator.allocator.?)) catch @panic("OOM");
+        Query = EcsQuery;
+        Observer = EcsObserver;
+        System = EcsSystem;
+        Flecs = EcsFlecs;
+        FlecsCore = EcsFlecsCore;
+        World = EcsWorld;
+        Wildcard = EcsWildcard;
+        Any = EcsAny;
+        This = EcsThis;
+        Variable = EcsVariable;
+        Transitive = EcsTransitive;
+        Reflexive = EcsReflexive;
+        Final = EcsFinal;
+        Inheritable = EcsInheritable;
+        OnInstantiate = EcsOnInstantiate;
+        Override = EcsOverride;
+        Inherit = EcsInherit;
+        DontInherit = EcsDontInherit;
+        Symmetric = EcsSymmetric;
+        Exclusive = EcsExclusive;
+        Acyclic = EcsAcyclic;
+        Traversable = EcsTraversable;
+        With = EcsWith;
+        OneOf = EcsOneOf;
+        CanToggle = EcsCanToggle;
+        Trait = EcsTrait;
+        Relationship = EcsRelationship;
+        Target = EcsTarget;
+        PairIsTag = EcsPairIsTag;
+        Name = EcsName;
+        Symbol = EcsSymbol;
+        Alias = EcsAlias;
+        ChildOf = EcsChildOf;
+        IsA = EcsIsA;
+        DependsOn = EcsDependsOn;
+        SlotOf = EcsSlotOf;
+        OrderedChildren = EcsOrderedChildren;
+        Module = EcsModule;
+        Prefab = EcsPrefab;
+        Disabled = EcsDisabled;
+        NotQueryable = EcsNotQueryable;
+        OnAdd = EcsOnAdd;
+        OnRemove = EcsOnRemove;
+        OnSet = EcsOnSet;
+        Monitor = EcsMonitor;
+        OnTableCreate = EcsOnTableCreate;
+        OnTableDelete = EcsOnTableDelete;
+        OnDelete = EcsOnDelete;
+        OnDeleteTarget = EcsOnDeleteTarget;
+        Remove = EcsRemove;
+        Delete = EcsDelete;
+        Panic = EcsPanic;
+        Singleton = EcsSingleton;
+        Sparse = EcsSparse;
+        DontFragment = EcsDontFragment;
+        PredEq = EcsPredEq;
+        PredMatch = EcsPredMatch;
+        PredLookup = EcsPredLookup;
+        ScopeOpen = EcsScopeOpen;
+        ScopeClose = EcsScopeClose;
+        Empty = EcsEmpty;
+        OnStart = EcsOnStart;
+        PreFrame = EcsPreFrame;
+        OnLoad = EcsOnLoad;
+        PostLoad = EcsPostLoad;
+        PreUpdate = EcsPreUpdate;
+        OnUpdate = EcsOnUpdate;
+        OnValidate = EcsOnValidate;
+        PostUpdate = EcsPostUpdate;
+        PreStore = EcsPreStore;
+        OnStore = EcsOnStore;
+        PostFrame = EcsPostFrame;
+        Phase = EcsPhase;
+        Constant = EcsConstant;
     }
+
+    num_worlds += 1;
+    world_component_lookup.put(world, std.AutoHashMap(usize, id_t).init(EcsAllocator.allocator.?)) catch @panic("OOM");
+
     return world;
 }
 extern fn ecs_init() *world_t;
@@ -1458,7 +1460,6 @@ pub fn fini(world: *world_t) i32 {
     const fini_result = ecs_fini(world);
 
     if (world == first_world) {
-        // Clear the stored ID's for the first world, so if another gets created later they don't get stale IDs
         var it = first_world_pointers.iterator();
         while (it.next()) |kv| {
             const ptr = kv.key_ptr.*;
@@ -1467,9 +1468,9 @@ pub fn fini(world: *world_t) i32 {
         first_world_pointers.deinit();
     }
 
-    var component_type_lookup = world_component_lookup.getPtr(world);
-    if (component_type_lookup != null) {
-        component_type_lookup.?.deinit();
+    if (world_component_lookup.fetchRemove(world)) |kv| {
+        var value = kv.value;
+        value.deinit();
     }
 
     if (num_worlds == 0) {
@@ -1624,9 +1625,9 @@ extern fn ecs_dim(world: *world_t, entity_count: i32) void;
 pub const shrink = ecs_shrink;
 extern fn ecs_shrink(world: *world_t) void;
 
-/// `pub fn set_entity_range(world: *world_t, id_start: entity_t, id_end: entity_t) void`
-pub const set_entity_range = ecs_set_entity_range;
-extern fn ecs_set_entity_range(world: *world_t, id_start: entity_t, id_end: entity_t) void;
+/// `pub fn entity_range_new(world: *world_t, id_start: entity_t, id_end: entity_t) void`
+pub const entity_range_new = ecs_entity_range_new;
+extern fn ecs_entity_range_new(world: *world_t, id_start: entity_t, id_end: entity_t) void;
 
 /// `pub fn enable_range_check(world: *world_t, enable: bool) bool`
 pub const enable_range_check = ecs_enable_range_check;
@@ -1643,6 +1644,7 @@ extern fn ecs_run_aperiodic(world: *world_t, flags: flags32_t) void;
 pub const delete_empty_tables_desc_t = struct {
     clear_generation: u16,
     delete_generation: u16,
+    offset: i32,
     time_budget_seconds: f64,
 };
 
@@ -2433,6 +2435,10 @@ extern fn ecs_observer_get_ctx(world: *const world_t, observer: entity_t) ?*anyo
 /// `pub fn observer_get_binding_ctx(world: *const world_t, observer: entity_t) ?*anyopaque`
 pub const observer_get_binding_ctx = ecs_observer_get_binding_ctx;
 extern fn ecs_observer_get_binding_ctx(world: *const world_t, observer: entity_t) ?*anyopaque;
+
+/// `pub fn observer_update(world: *world_t, observer: entity_t, desc: *const observer_desc_t) void`
+pub const observer_update = ecs_observer_update;
+extern fn ecs_observer_update(world: *world_t, observer: entity_t, desc: *const observer_desc_t) void;
 //--------------------------------------------------------------------------------------------------
 //
 // Functions for working with `iter_t`.
@@ -2535,9 +2541,9 @@ extern fn ecs_worker_iter(it: *const iter_t, index: i32, count: i32) iter_t;
 pub const field_w_size = ecs_field_w_size;
 extern fn ecs_field_w_size(it: *const iter_t, size: usize, index: i8) ?*anyopaque;
 
-/// `pub fn field_w_size(it: *const iter_t, size: usize, index: i8) ?*anyopaque`
-pub const ecs_field_at_w_size = ecs_ecs_field_at_w_size;
-extern fn ecs_ecs_field_at_w_size(it: *const iter_t, size: usize, index: i8, row: i32) ?*anyopaque;
+/// `pub fn field_at_w_size(it: *const iter_t, size: usize, index: i8, row: i32) ?*anyopaque`
+pub const field_at_w_size = ecs_field_at_w_size;
+extern fn ecs_field_at_w_size(it: *const iter_t, size: usize, index: i8, row: i32) ?*anyopaque;
 
 /// `pub fn field_is_readonly(it: *const iter_t, index: i8) bool`
 pub const field_is_readonly = ecs_field_is_readonly;
@@ -3607,6 +3613,8 @@ pub const script_eval_desc_t = extern struct {
 
 pub const script_eval_result_t = extern struct {
     error_: ?[*:0]u8,
+    line: i32 = 0,
+    column: i32 = 0,
 };
 
 pub const script_parse = ecs_script_parse;

@@ -679,6 +679,8 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{
         .name = "zflecs-tests",
         .root_module = tests_module,
+        .use_lld = true,
+        .use_llvm = true,
     });
     b.installArtifact(tests);
 
